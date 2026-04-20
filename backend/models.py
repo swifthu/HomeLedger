@@ -1,0 +1,50 @@
+from datetime import datetime
+from sqlalchemy import Column, String, Float, Integer, DateTime, Text, Index
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()
+
+
+class Record(Base):
+    __tablename__ = "records"
+
+    id = Column(String, primary_key=True)
+    created_at = Column(String, nullable=False, default=datetime.utcnow)
+    updated_at = Column(String, nullable=False, default=datetime.utcnow)
+    category = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    description = Column(Text, nullable=True)
+    ai_confidence = Column(Float, nullable=True)
+    status = Column(String, default="confirmed")
+    source = Column(String, default="ai")
+    ground_truth_category = Column(String, nullable=True)
+    ground_truth_amount = Column(Float, nullable=True)
+    user_corrected = Column(Integer, default=0)
+
+    __table_args__ = (
+        Index("idx_records_created_at", "created_at"),
+        Index("idx_records_status", "status"),
+    )
+
+
+class Category(Base):
+    __tablename__ = "categories"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    icon = Column(String, nullable=True)
+    color = Column(String, nullable=True)
+
+
+class MonthlyStats(Base):
+    __tablename__ = "monthly_stats"
+
+    id = Column(String, primary_key=True)
+    month = Column(String, unique=True, nullable=False)
+    total_records = Column(Integer, default=0)
+    ai_records = Column(Integer, default=0)
+    rule_records = Column(Integer, default=0)
+    manual_records = Column(Integer, default=0)
+    accuracy_rate = Column(Float, default=0.0)
+    zero_miss_rate = Column(Float, default=0.0)
+    computed_at = Column(String, nullable=True)
