@@ -13,7 +13,8 @@ from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Query, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -30,7 +31,7 @@ app = FastAPI(title="HomeLedger API")
 # CORS middleware for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,6 +40,16 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     init_db()
+    # 挂载前端静态文件（需要确保API路由优先）
+    frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+    if frontend_dist.exists():
+        app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
+        app.mount("/favicon.svg", StaticFiles(directory=str(frontend_dist), html=False), name="favicon")
+
+@app.get("/")
+async def serve_index():
+    frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+    return FileResponse(str(frontend_dist / "index.html"))
 
 # ── Dependencies ───────────────────────────────────────────────────────────────
 
