@@ -10,7 +10,7 @@ class ImageUnderstandClient:
 
     def __init__(self, api_key: Optional[str] = None, api_host: Optional[str] = None):
         self.api_key = api_key or os.getenv("MINIMAX_API_KEY", "")
-        self.api_host = api_host or os.getenv("MINIMAX_API_HOST", "https://api.minimax.io")
+        self.api_host = api_host or os.getenv("MINIMAX_API_HOST", "https://api.minimaxi.com")
 
         if not self.api_key:
             raise ValueError("MINIMAX_API_KEY environment variable is required")
