@@ -1,8 +1,29 @@
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, DateTime, Text, Index
+from sqlalchemy import Column, String, Float, Integer, DateTime, Text, Index, ForeignKey
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False)  # cash/virtual/liability/investment/prepaid
+    balance = Column(Float, default=0.0)
+    currency = Column(String, default="CNY")
+    color = Column(String, nullable=True)
+    icon = Column(String, nullable=True)
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
+    deleted_at = Column(String, nullable=True)
+    is_active = Column(Integer, default=1)
+
+    __table_args__ = (
+        Index("idx_accounts_type", "type"),
+        Index("idx_accounts_deleted_at", "deleted_at"),
+    )
 
 
 class Record(Base):
@@ -24,6 +45,7 @@ class Record(Base):
     tags = Column(String, nullable=True)
     deleted_at = Column(String, nullable=True)
     year_month = Column(String, nullable=False)
+    account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
 
     __table_args__ = (
         Index("idx_records_created_at", "created_at"),

@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from db.database import SessionLocal, engine, init_db
 from export.excel import export_records_to_excel
-from models import Base, Category, MonthlyStats, Record
+from models import Account, Base, Category, MonthlyStats, Record
 from ai.classifier import get_classifier
 
 # ── Init ───────────────────────────────────────────────────────────────────────
@@ -73,6 +73,7 @@ class RecordCreate(BaseModel):
     ground_truth_amount: Optional[float] = None
     merchant: Optional[str] = None
     tags: Optional[str] = None  # 逗号分隔的标签
+    account_id: Optional[str] = None
 
 class RecordUpdate(BaseModel):
     ground_truth_category: Optional[str] = None
@@ -95,6 +96,7 @@ class RecordOut(BaseModel):
     merchant: Optional[str] = None
     tags: Optional[str] = None
     year_month: Optional[str] = None
+    account_id: Optional[str] = None
 
 class CategoryOut(BaseModel):
     id: str
@@ -123,6 +125,35 @@ class MonthlyStatsOut(BaseModel):
     manual_records: int
     accuracy_rate: Optional[float]
     zero_miss_rate: Optional[float]
+
+class AccountCreate(BaseModel):
+    name: str
+    type: str
+    balance: float = 0.0
+    currency: str = "CNY"
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    balance: Optional[float] = None
+    currency: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    is_active: Optional[int] = None
+
+class AccountOut(BaseModel):
+    id: str
+    name: str
+    type: str
+    balance: float
+    currency: str
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    created_at: str
+    updated_at: str
+    is_active: int
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -350,8 +381,18 @@ def create_record(payload: RecordCreate, db: Session = Depends(get_db)):
         merchant=payload.merchant,
         tags=payload.tags,
         year_month=year_month,
+        account_id=payload.account_id,
     )
     db.add(record)
+    db.flush()
+    if payload.account_id:
+        account = db.query(Account).filter(Account.id == payload.account_id).first()
+        if account:
+            if account.type == "liability":
+                account.balance -= payload.amount
+            else:
+                account.balance += payload.amount
+            account.updated_at = now
     db.commit()
     db.refresh(record)
     after_commit(db, record.created_at)
@@ -403,7 +444,16 @@ def delete_record(record_id: str, db: Session = Depends(get_db)):
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
     month = record.created_at[:7]
-    record.deleted_at = datetime.utcnow().isoformat()
+    now = datetime.utcnow().isoformat()
+    if record.account_id:
+        account = db.query(Account).filter(Account.id == record.account_id).first()
+        if account:
+            if account.type == "liability":
+                account.balance += record.amount
+            else:
+                account.balance -= record.amount
+            account.updated_at = now
+    record.deleted_at = now
     db.commit()
     recompute_monthly_stats(db, month)
 
@@ -472,6 +522,97 @@ def export_excel(db: Session = Depends(get_db)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=HomeLedger_records.xlsx"},
     )
+
+# ── Accounts CRUD ─────────────────────────────────────────────────────────────
+
+def _account_to_out(a: Account) -> AccountOut:
+    return AccountOut(
+        id=a.id,
+        name=a.name,
+        type=a.type,
+        balance=a.balance or 0.0,
+        currency=a.currency or "CNY",
+        color=a.color,
+        icon=a.icon,
+        created_at=a.created_at,
+        updated_at=a.updated_at,
+        is_active=a.is_active if a.is_active is not None else 1,
+    )
+
+
+@app.get("/api/accounts/summary")
+def get_accounts_summary(db: Session = Depends(get_db)):
+    accounts = db.query(Account).filter(Account.deleted_at.is_(None)).all()
+    total_assets = sum(a.balance or 0.0 for a in accounts if a.type != "liability")
+    total_liabilities = sum(a.balance or 0.0 for a in accounts if a.type == "liability")
+    return {
+        "total_assets": total_assets,
+        "total_liabilities": total_liabilities,
+        "net_worth": total_assets + total_liabilities,
+        "accounts": [_account_to_out(a) for a in accounts],
+    }
+
+
+@app.get("/api/accounts", response_model=list[AccountOut])
+def list_accounts(db: Session = Depends(get_db)):
+    accounts = db.query(Account).filter(Account.deleted_at.is_(None)).order_by(Account.created_at).all()
+    return [_account_to_out(a) for a in accounts]
+
+
+@app.post("/api/accounts", response_model=AccountOut, status_code=201)
+def create_account(payload: AccountCreate, db: Session = Depends(get_db)):
+    now = datetime.utcnow().isoformat()
+    account = Account(
+        id=str(uuid.uuid4()),
+        name=payload.name,
+        type=payload.type,
+        balance=payload.balance,
+        currency=payload.currency,
+        color=payload.color,
+        icon=payload.icon,
+        created_at=now,
+        updated_at=now,
+        is_active=1,
+    )
+    db.add(account)
+    db.commit()
+    db.refresh(account)
+    return _account_to_out(account)
+
+
+@app.put("/api/accounts/{account_id}", response_model=AccountOut)
+def update_account(account_id: str, payload: AccountUpdate, db: Session = Depends(get_db)):
+    account = db.query(Account).filter(Account.id == account_id, Account.deleted_at.is_(None)).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if payload.name is not None:
+        account.name = payload.name
+    if payload.type is not None:
+        account.type = payload.type
+    if payload.balance is not None:
+        account.balance = payload.balance
+    if payload.currency is not None:
+        account.currency = payload.currency
+    if payload.color is not None:
+        account.color = payload.color
+    if payload.icon is not None:
+        account.icon = payload.icon
+    if payload.is_active is not None:
+        account.is_active = payload.is_active
+    account.updated_at = datetime.utcnow().isoformat()
+    db.commit()
+    db.refresh(account)
+    return _account_to_out(account)
+
+
+@app.delete("/api/accounts/{account_id}", status_code=204)
+def delete_account(account_id: str, db: Session = Depends(get_db)):
+    account = db.query(Account).filter(Account.id == account_id, Account.deleted_at.is_(None)).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    account.deleted_at = datetime.utcnow().isoformat()
+    db.commit()
+
 
 # ── SPA Fallback (must be last) ────────────────────────────────────────────────
 # 所有非API路径返回index.html，由React Router处理前端路由

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { ClassifyResult, ImageUnderstandResult } from '../api/client';
+import type { ClassifyResult, ImageUnderstandResult, Account } from '../api/client';
 
 interface Props {
   onCreated?: () => void;
@@ -9,12 +10,18 @@ interface Props {
 export function ChatInput({ onCreated }: Props) {
   const [text, setText] = useState('');
   const [merchant, setMerchant] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [result, setResult] = useState<ClassifyResult | null>(null);
   const [imageResult, setImageResult] = useState<ImageUnderstandResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: accounts = [] } = useQuery<Account[]>({
+    queryKey: ['accounts'],
+    queryFn: () => api.getAccounts(),
+  });
 
   const handleClassify = async () => {
     if (!text.trim()) return;
@@ -71,6 +78,7 @@ export function ChatInput({ onCreated }: Props) {
         source: 'ai',
         user_corrected: false,
         merchant: merchant || imageResult.store || undefined,
+        account_id: accountId || undefined,
       });
       setText('');
       setMerchant('');
@@ -94,6 +102,7 @@ export function ChatInput({ onCreated }: Props) {
         source: 'ai',
         user_corrected: false,
         merchant: merchant || undefined,
+        account_id: accountId || undefined,
       });
       setText('');
       setMerchant('');
@@ -115,6 +124,7 @@ export function ChatInput({ onCreated }: Props) {
         source: 'ai',
         user_corrected: true,
         merchant: merchant || undefined,
+        account_id: accountId || undefined,
       });
       setText('');
       setMerchant('');
@@ -155,6 +165,14 @@ export function ChatInput({ onCreated }: Props) {
         onChange={e => setMerchant(e.target.value)}
         placeholder="商户（可选），如：瑞幸、美团"
       />
+      <select value={accountId} onChange={e => setAccountId(e.target.value)}>
+        <option value="">选择账户</option>
+        {accounts.map(acc => (
+          <option key={acc.id} value={acc.id}>
+            {acc.icon || ''} {acc.name}
+          </option>
+        ))}
+      </select>
       <div className="chat-input-toolbar">
         <input
           ref={fileInputRef}

@@ -5,8 +5,30 @@ const client = axios.create({
   timeout: 30000,
 });
 
+export interface Account {
+  id: string;
+  name: string;
+  type: 'cash' | 'virtual' | 'liability' | 'investment' | 'prepaid';
+  balance: number;
+  currency: string;
+  color?: string;
+  icon?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  is_active: boolean;
+}
+
+export interface AccountSummary {
+  total_assets: number;
+  total_liabilities: number;
+  net_worth: number;
+  accounts: Account[];
+}
+
 export interface ExpenseRecord {
   id: string;
+  account_id?: string;
   created_at: string;
   updated_at: string;
   category: string;
@@ -73,6 +95,21 @@ export const api = {
 
   deleteRecord: (id: string) =>
     client.delete(`/api/records/${id}`).then(r => r.data),
+
+  getAccounts: () =>
+    client.get<Account[]>('/api/accounts').then(r => r.data),
+
+  createAccount: (data: Partial<Account>) =>
+    client.post<Account>('/api/accounts', data).then(r => r.data),
+
+  updateAccount: (id: string, data: Partial<Account>) =>
+    client.put<Account>(`/api/accounts/${id}`, data).then(r => r.data),
+
+  deleteAccount: (id: string) =>
+    client.delete(`/api/accounts/${id}`).then(r => r.data),
+
+  getAccountsSummary: () =>
+    client.get<AccountSummary>('/api/accounts/summary').then(r => r.data),
 
   classifyExpense: (description: string) =>
     client.post<ClassifyResult>('/api/ai/classify', { text: description }).then(r => r.data),

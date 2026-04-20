@@ -29,9 +29,33 @@ export function Dashboard() {
     },
   });
 
+  const accountsSummary = useQuery({
+    queryKey: ['accountsSummary'],
+    queryFn: api.getAccountsSummary,
+  });
+
   return (
     <div className="page dashboard">
       <ReviewBanner count={pendingCount.data ?? 0} />
+
+      {accountsSummary.data && (
+        <div className="account-summary">
+          <div className="summary-item">
+            <span className="summary-label">总资产</span>
+            <span className="summary-value">¥{accountsSummary.data.total_assets.toFixed(2)}</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">总负债</span>
+            <span className="summary-value negative">¥{Math.abs(accountsSummary.data.total_liabilities).toFixed(2)}</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">净资产</span>
+            <span className={`summary-value ${accountsSummary.data.net_worth < 0 ? 'negative' : 'positive'}`}>
+              ¥{accountsSummary.data.net_worth.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="stats-grid">
         <StatCard

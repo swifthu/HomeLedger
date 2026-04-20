@@ -1,13 +1,38 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import type { Account } from '../api/client';
 import { useState } from 'react';
+import { AccountForm } from '../components/AccountForm';
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  cash: '现金',
+  virtual: '虚拟账户',
+  liability: '负债',
+  investment: '投资',
+  prepaid: '预付',
+};
+
+const ACCOUNT_TYPE_ICONS: Record<string, string> = {
+  cash: '💰',
+  virtual: '👛',
+  liability: '💳',
+  investment: '📈',
+  prepaid: '🎫',
+};
 
 export function Settings() {
   const [restoreLoading, setRestoreLoading] = useState(false);
+  const [showAccountForm, setShowAccountForm] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | undefined>(undefined);
 
   const { data: categories } = useQuery({
     queryKey: ['categories'],
     queryFn: api.getCategories,
+  });
+
+  const { data: accounts } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: api.getAccounts,
   });
 
   const handleBackup = async () => {
@@ -34,9 +59,53 @@ export function Settings() {
     }
   };
 
+  const openCreate = () => {
+    setEditingAccount(undefined);
+    setShowAccountForm(true);
+  };
+
+  const openEdit = (account: Account) => {
+    setEditingAccount(account);
+    setShowAccountForm(true);
+  };
+
+  const closeForm = () => {
+    setShowAccountForm(false);
+    setEditingAccount(undefined);
+  };
+
   return (
     <div className="page settings">
       <h1>设置</h1>
+
+      <section>
+        <div className="section-header">
+          <h2>账户管理</h2>
+          <button className="btn-primary" onClick={openCreate}>+ 创建账户</button>
+        </div>
+        <ul className="account-list">
+          {accounts?.map(account => (
+            <li key={account.id} className="account-item">
+              <span className="account-icon" style={{ color: account.color }}>
+                {account.icon || ACCOUNT_TYPE_ICONS[account.type]}
+              </span>
+              <div className="account-info">
+                <span className="account-name">{account.name}</span>
+                <span className="account-type">{ACCOUNT_TYPE_LABELS[account.type]}</span>
+              </div>
+              <span className={`account-balance ${account.balance < 0 ? 'negative' : ''}`}>
+                ¥{account.balance.toFixed(2)}
+              </span>
+              <div className="account-actions">
+                <button onClick={() => openEdit(account)}>编辑</button>
+              </div>
+            </li>
+          ))}
+          {accounts?.length === 0 && (
+            <li className="empty-hint">暂无账户，点击"创建账户"添加</li>
+          )}
+        </ul>
+      </section>
 
       <section>
         <h2>分类管理</h2>
@@ -59,6 +128,10 @@ export function Settings() {
         <input type="file" accept=".db" onChange={handleRestore} disabled={restoreLoading} />
         {restoreLoading && <span>恢复中...</span>}
       </section>
+
+      {showAccountForm && (
+        <AccountForm account={editingAccount} onClose={closeForm} />
+      )}
     </div>
   );
 }
