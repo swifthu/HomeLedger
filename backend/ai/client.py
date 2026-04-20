@@ -27,12 +27,12 @@ class AIClient:
         }
 
         payload = {
-            "model": "MiniMax-Text-01",
+            "model": "MiniMax-M2.7",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text},
             ],
-            "max_tokens": 256,
+            "max_tokens": 1024,
             "temperature": 0.1,
         }
 
@@ -42,7 +42,17 @@ class AIClient:
                 response.raise_for_status()
                 data = response.json()
 
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            message = data.get("choices", [{}])[0].get("message", {})
+            content = message.get("content", "")
+
+            # 兼容：如果content为空，尝试从reasoning_content提取JSON
+            if not content:
+                reasoning = message.get("reasoning_content", "")
+                import re
+                match = re.search(r'\{[^}]+\}', reasoning, re.DOTALL)
+                if match:
+                    content = match.group()
+
             if not content:
                 raise ValueError("Empty response from AI")
 

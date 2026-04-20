@@ -6,9 +6,12 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, Query, Response
+from fastapi import FastAPI, Depends, HTTPException, Query, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -202,6 +205,41 @@ def classify_text(req: ClassifyRequest):
         confidence=result.confidence,
         status=result.status,
         source=result.source,
+    )
+
+
+# ── Image Understanding ────────────────────────────────────────────────────────
+
+class ImageUnderstandRequest(BaseModel):
+    prompt: str = "请分析这张图片，提取消费项目和金额，返回JSON格式"
+
+class ImageUnderstandResponse(BaseModel):
+    content: str
+    items: list[dict] = []
+    total: Optional[float] = None
+    store: Optional[str] = None
+    date: Optional[str] = None
+
+
+@app.post("/api/ai/image", response_model=ImageUnderstandResponse)
+def understand_image(
+    file: UploadFile = File(...),
+    prompt: str = Query("请分析这张小票/发票，提取所有消费项目和金额，返回JSON格式：{\"items\":[{\"name\":\"商品名称\",\"amount\":金额}],\"total\":总金额,\"store\":\"商店名称\"}，只返回JSON，不要其他文字。"),
+):
+    """
+    图片理解端点：识别发票/小票图片，提取消费信息
+    """
+    from ai.image_client import understand_receipt
+
+    image_data = file.file.read()
+    result = understand_receipt(image_data)
+
+    return ImageUnderstandResponse(
+        content=result.get("content", ""),
+        items=result.get("items", []),
+        total=result.get("total"),
+        store=result.get("store"),
+        date=result.get("date"),
     )
 
 # ── Monthly Stats ─────────────────────────────────────────────────────────────
