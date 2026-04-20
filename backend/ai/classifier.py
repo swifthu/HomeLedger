@@ -58,25 +58,35 @@ class Classifier:
         第二阶段：AI 分类（规则未命中时）
         根据 AI confidence 决定 status
         """
-        ai_result = classify_with_ai(text, SYSTEM_PROMPT)
+        try:
+            ai_result = classify_with_ai(text, SYSTEM_PROMPT)
 
-        category = ai_result.get("category", "其他")
-        amount = ai_result.get("amount")
-        confidence = ai_result.get("confidence", 0.5)
+            category = ai_result.get("category", "其他")
+            amount = ai_result.get("amount")
+            confidence = ai_result.get("confidence", 0.5)
 
-        # 根据置信度决定状态
-        if confidence >= 0.85:
-            status = "confirmed"
-        else:
-            status = "pending_review"
+            # 根据置信度决定状态
+            if confidence >= 0.85:
+                status = "confirmed"
+            else:
+                status = "pending_review"
 
-        return ClassifierResult(
-            category=category,
-            amount=amount,
-            confidence=confidence,
-            status=status,
-            source="ai",
-        )
+            return ClassifierResult(
+                category=category,
+                amount=amount,
+                confidence=confidence,
+                status=status,
+                source="ai",
+            )
+        except Exception as e:
+            # AI失败时返回默认结果，让用户手动分类
+            return ClassifierResult(
+                category="其他",
+                amount=None,
+                confidence=0.0,
+                status="pending_review",
+                source="ai",
+            )
 
     def classify_text(self, text: str) -> ClassifierResult:
         """

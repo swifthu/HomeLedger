@@ -1,12 +1,12 @@
 import axios from 'axios';
 
 const client = axios.create({
-  baseURL: 'http://localhost:8022',
+  baseURL: '',
   timeout: 30000,
 });
 
 export interface ExpenseRecord {
-  id: number;
+  id: string;
   created_at: string;
   updated_at: string;
   category: string;
@@ -18,6 +18,8 @@ export interface ExpenseRecord {
   ground_truth_category?: string;
   ground_truth_amount?: number;
   user_corrected: boolean;
+  merchant?: string;
+  tags?: string;
 }
 
 export interface Category {
@@ -51,6 +53,14 @@ export interface PageResult<T> {
   page_size: number;
 }
 
+export interface ImageUnderstandResult {
+  content: string;
+  items: Array<{ name: string; amount: number }>;
+  total: number | null;
+  store: string | null;
+  date: string | null;
+}
+
 export const api = {
   getRecords: (params?: { page?: number; page_size?: number; start_date?: string; end_date?: string; category?: string; status?: string }) =>
     client.get<PageResult<ExpenseRecord>>('/api/records', { params }).then(r => r.data),
@@ -58,14 +68,22 @@ export const api = {
   createRecord: (data: Partial<ExpenseRecord>) =>
     client.post<ExpenseRecord>('/api/records', data).then(r => r.data),
 
-  updateRecord: (id: number, data: Partial<ExpenseRecord>) =>
+  updateRecord: (id: string, data: Partial<ExpenseRecord>) =>
     client.put<ExpenseRecord>(`/api/records/${id}`, data).then(r => r.data),
 
-  deleteRecord: (id: number) =>
+  deleteRecord: (id: string) =>
     client.delete(`/api/records/${id}`).then(r => r.data),
 
   classifyExpense: (description: string) =>
-    client.post<ClassifyResult>('/api/ai/classify', { description }).then(r => r.data),
+    client.post<ClassifyResult>('/api/ai/classify', { text: description }).then(r => r.data),
+
+  understandImage: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return client.post<ImageUnderstandResult>('/api/ai/image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data);
+  },
 
   getMonthlyStats: (month?: string) =>
     client.get<MonthlyStats[]>('/api/stats/monthly', { params: { month } }).then(r => r.data[0]),

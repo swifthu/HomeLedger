@@ -13,7 +13,7 @@ export function Review() {
   });
 
   const update = useMutation({
-    mutationFn: ({ id, action, data }: { id: number; action: 'accept' | 'reject'; data?: any }) => {
+    mutationFn: ({ id, action, data }: { id: string; action: 'accept' | 'reject'; data?: any }) => {
       if (action === 'accept') {
         return api.updateRecord(id, { ...data, status: 'confirmed' });
       } else {

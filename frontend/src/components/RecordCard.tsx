@@ -2,7 +2,7 @@ import type { ExpenseRecord } from '../api/client';
 
 interface Props {
   record: ExpenseRecord;
-  onEdit?: (id: number) => void;
+  onEdit?: (id: string) => void;
 }
 
 const CATEGORY_ICONS: Record<string, string> = {

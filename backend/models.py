@@ -20,10 +20,16 @@ class Record(Base):
     ground_truth_category = Column(String, nullable=True)
     ground_truth_amount = Column(Float, nullable=True)
     user_corrected = Column(Integer, default=0)
+    merchant = Column(String, nullable=True)
+    tags = Column(String, nullable=True)
+    deleted_at = Column(String, nullable=True)
+    year_month = Column(String, nullable=False)
 
     __table_args__ = (
         Index("idx_records_created_at", "created_at"),
         Index("idx_records_status", "status"),
+        Index("idx_records_category", "category"),
+        Index("idx_records_category_created", "category", "created_at"),
     )
 
 

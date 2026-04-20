@@ -7,7 +7,7 @@ interface Props {
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
-  onEdit?: (id: number) => void;
+  onEdit?: (id: string) => void;
 }
 
 export function RecordList({ records, total, page, pageSize, onPageChange, onEdit }: Props) {

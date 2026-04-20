@@ -14,14 +14,14 @@ export function RecordDetail() {
   const { data: record, isLoading } = useQuery({
     queryKey: ['record', id],
     queryFn: async () => {
-      const res = await api.getRecords({ page: 1, page_size: 1 });
-      return res.items.find(r => r.id === Number(id));
+      const res = await api.getRecords({ page: 1, page_size: 100 });
+      return res.items.find(r => r.id === id);
     },
     enabled: !!id,
   });
 
   const update = useMutation({
-    mutationFn: (data: Partial<ExpenseRecord>) => api.updateRecord(Number(id), data),
+    mutationFn: (data: Partial<ExpenseRecord>) => api.updateRecord(id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['record', id] });
       setEditing(false);
@@ -53,6 +53,10 @@ export function RecordDetail() {
           <input type="number" value={form.amount ?? record.amount} onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))} />
           <label>描述</label>
           <input value={form.description ?? record.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          <label>商户</label>
+          <input value={form.merchant ?? record.merchant ?? ''} onChange={e => setForm(f => ({ ...f, merchant: e.target.value }))} />
+          <label>标签</label>
+          <input value={form.tags ?? record.tags ?? ''} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} />
           <button onClick={handleSave}>保存</button>
           <button onClick={() => setEditing(false)}>取消</button>
         </div>
@@ -61,6 +65,8 @@ export function RecordDetail() {
           <p>分类: {record.category}</p>
           <p>金额: ¥{record.amount.toFixed(2)}</p>
           <p>描述: {record.description}</p>
+          <p>商户: {record.merchant || '无'}</p>
+          <p>标签: {record.tags || '无'}</p>
           <p>日期: {new Date(record.created_at).toLocaleString()}</p>
           <p>状态: {record.status === 'pending_review' ? '待审核' : '已确认'}</p>
           <p>来源: {record.source === 'ai' ? 'AI' : record.source === 'rule' ? '规则' : '手动'}</p>

@@ -37,19 +37,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 前端静态文件目录
+FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+
 @app.on_event("startup")
 def startup():
     init_db()
-    # 挂载前端静态文件（需要确保API路由优先）
-    frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
-    if frontend_dist.exists():
-        app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
-        app.mount("/favicon.svg", StaticFiles(directory=str(frontend_dist), html=False), name="favicon")
+    # 挂载前端资源
+    if FRONTEND_DIST.exists():
+        app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets"), html=False), name="assets")
 
 @app.get("/")
 async def serve_index():
-    frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
-    return FileResponse(str(frontend_dist / "index.html"))
+    return FileResponse(str(FRONTEND_DIST / "index.html"))
 
 # ── Dependencies ───────────────────────────────────────────────────────────────
 
@@ -71,6 +71,8 @@ class RecordCreate(BaseModel):
     source: str = "ai"
     ground_truth_category: Optional[str] = None
     ground_truth_amount: Optional[float] = None
+    merchant: Optional[str] = None
+    tags: Optional[str] = None  # 逗号分隔的标签
 
 class RecordUpdate(BaseModel):
     ground_truth_category: Optional[str] = None
@@ -90,6 +92,9 @@ class RecordOut(BaseModel):
     ground_truth_category: Optional[str] = None
     ground_truth_amount: Optional[float] = None
     user_corrected: int
+    merchant: Optional[str] = None
+    tags: Optional[str] = None
+    year_month: Optional[str] = None
 
 class CategoryOut(BaseModel):
     id: str
@@ -300,9 +305,9 @@ def list_records(
     if status:
         q = q.filter(Record.status == status)
 
-    total = q.count()
+    total = q.filter(Record.deleted_at.is_(None)).count()
     offset = (page - 1) * page_size
-    items = q.order_by(Record.created_at.desc()).offset(offset).limit(page_size).all()
+    items = q.filter(Record.deleted_at.is_(None)).order_by(Record.created_at.desc()).offset(offset).limit(page_size).all()
 
     def to_record_out(r: Record) -> RecordOut:
         return RecordOut(
@@ -318,6 +323,9 @@ def list_records(
             ground_truth_category=r.ground_truth_category,
             ground_truth_amount=r.ground_truth_amount,
             user_corrected=r.user_corrected or 0,
+            merchant=r.merchant,
+            tags=r.tags,
+            year_month=getattr(r, 'year_month', None) or r.created_at[:7] if r.created_at else None,
         )
 
     return PageResultOut(items=[to_record_out(r) for r in items], total=total, page=page, page_size=page_size)
@@ -326,6 +334,7 @@ def list_records(
 @app.post("/api/records", response_model=RecordOut, status_code=201)
 def create_record(payload: RecordCreate, db: Session = Depends(get_db)):
     now = datetime.utcnow().isoformat()
+    year_month = now[:7]  # 自动从 created_at 计算 year_month
     record = Record(
         id=str(uuid.uuid4()),
         created_at=now,
@@ -338,6 +347,9 @@ def create_record(payload: RecordCreate, db: Session = Depends(get_db)):
         source=payload.source,
         ground_truth_category=payload.ground_truth_category or payload.category,
         ground_truth_amount=payload.ground_truth_amount or payload.amount,
+        merchant=payload.merchant,
+        tags=payload.tags,
+        year_month=year_month,
     )
     db.add(record)
     db.commit()
@@ -384,11 +396,14 @@ def update_record(
 
 @app.delete("/api/records/{record_id}", status_code=204)
 def delete_record(record_id: str, db: Session = Depends(get_db)):
-    record = db.query(Record).filter(Record.id == record_id).first()
+    record = db.query(Record).filter(
+        Record.id == record_id,
+        Record.deleted_at.is_(None),
+    ).first()
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
     month = record.created_at[:7]
-    db.delete(record)
+    record.deleted_at = datetime.utcnow().isoformat()
     db.commit()
     recompute_monthly_stats(db, month)
 
@@ -457,3 +472,14 @@ def export_excel(db: Session = Depends(get_db)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=HomeLedger_records.xlsx"},
     )
+
+# ── SPA Fallback (must be last) ────────────────────────────────────────────────
+# 所有非API路径返回index.html，由React Router处理前端路由
+
+@app.get("/{path:path}")
+async def spa_fallback(path: str):
+    """Catch-all for SPA routes - API routes are matched first"""
+    file_path = FRONTEND_DIST / path
+    if path and file_path.is_file():
+        return FileResponse(str(file_path))
+    return FileResponse(str(FRONTEND_DIST / "index.html"))
